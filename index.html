@@ -1,0 +1,198 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Mini-12306</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        h1, h3 {
+            color: #667eea;
+            text-align: center;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+            button:hover {
+                background: #764ba2;
+            }
+
+        .train-item {
+            border-bottom: 1px solid #ddd;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .train-code {
+            font-weight: bold;
+            font-size: 18px;
+            color: #667eea;
+        }
+
+        .train-price {
+            color: #ff6b6b;
+            font-weight: bold;
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            display: flex;
+            justify-content: space-around;
+            padding: 12px;
+        }
+
+        .nav-item {
+            cursor: pointer;
+            padding: 8px 20px;
+        }
+
+            .nav-item.active {
+                color: #667eea;
+                border-bottom: 2px solid #667eea;
+            }
+
+        input {
+            padding: 8px;
+            margin: 0 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🚄 Mini-12306</h1>
+        <div style="text-align: center;">
+            <label>出发地：</label>
+            <input type="text" id="fromCity" value="武汉" size="8">
+            <label>目的地：</label>
+            <input type="text" id="toCity" value="北京" size="8">
+            <label>日期：</label>
+            <input type="date" id="travelDate" value="2026-05-14">
+            <button onclick="searchTrains()">🔍 查询车次</button>
+        </div>
+    </div>
+
+    <div class="card" id="trainList">
+        <h3>可购票车次</h3>
+        <div id="trains">点击查询按钮加载车次</div>
+    </div>
+
+    <div class="bottom-nav">
+        <div class="nav-item active" onclick="showPage('home')">🏠 首页</div>
+        <div class="nav-item" onclick="showPage('order')">📋 订单</div>
+        <div class="nav-item" onclick="showPage('my')">👤 我的</div>
+    </div>
+
+    <script>
+        let orders = JSON.parse(localStorage.getItem('orders') || '[]');
+
+        function searchTrains() {
+            fetch('http://localhost:8888/api/trains')
+                .then(res => res.json())
+                .then(data => {
+                    let html = '';
+                    for (let train of data) {
+                        html += `
+                                <div class="train-item">
+                                    <div>
+                                        <span class="train-code">${train.code}</span>
+                                        ${train.from} → ${train.to} | ${train.time} | 余票:${train.remaining}
+                                    </div>
+                                    <div>
+                                        <span class="train-price">￥${train.price}</span>
+                                        <button onclick="buyTicket(${train.id}, '${train.code}', '${train.from}', '${train.to}', ${train.price})">购票</button>
+                                    </div>
+                                </div>
+                            `;
+                    }
+                    document.getElementById('trains').innerHTML = html;
+                })
+                .catch(err => {
+                    document.getElementById('trains').innerHTML = '连接服务器失败: ' + err.message;
+                });
+        }
+
+        function buyTicket(id, code, from, to, price) {
+            fetch(`http://localhost:8888/api/buy?id=${id}`)
+                .then(res => res.json())
+                .then(result => {
+                    if (result.success) {
+                        alert(result.message);
+                        searchTrains();
+                        orders.unshift({
+                            id: Date.now(),
+                            code: code,
+                            from: from,
+                            to: to,
+                            price: price,
+                            date: document.getElementById('travelDate').value
+                        });
+                        localStorage.setItem('orders', JSON.stringify(orders));
+                    } else {
+                        alert(result.message);
+                    }
+                });
+        }
+
+        function showPage(page) {
+            if (page === 'order') {
+                let orderHtml = '<h3>我的订单</h3>';
+                if (orders.length === 0) {
+                    orderHtml += '<p style="text-align:center">暂无订单</p>';
+                } else {
+                    for (let order of orders) {
+                        orderHtml += `<div class="train-item">${order.code} ${order.from}→${order.to} ￥${order.price} ${order.date}</div>`;
+                    }
+                }
+                document.getElementById('trainList').innerHTML = orderHtml;
+            } else if (page === 'my') {
+                document.getElementById('trainList').innerHTML = `
+                        <h3>我的信息</h3>
+                        <div class="train-item">用户名：张三</div>
+                        <div class="train-item">手机号：138****1234</div>
+                        <div class="train-item">身份证：420106********5678</div>
+                        <div class="train-item">余额：￥1280.00</div>
+                    `;
+            } else {
+                document.getElementById('trainList').innerHTML = `
+                        <h3>可购票车次</h3>
+                        <div id="trains">点击查询按钮加载车次</div>
+                    `;
+                searchTrains();
+            }
+        }
+
+        // 页面加载时自动查询车次
+        searchTrains();
+    </script>
+</body>
+</html>
